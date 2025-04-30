@@ -1,11 +1,27 @@
-import express from 'express';
-import { approveCollaboration,rejectCollaboration, getCollaborationsForIdea, requestCollaboration } from "../controllers/collaborationController.js";
+import express from "express";
+import { approveCollaboration, getCollaborationsForIdea, rejectCollaboration, requestCollaboration, withdrawCollaboration } from "../controllers/collaborationController.js";
 
 const collaborationRouter = express.Router();
 
-collaborationRouter.post('/', getCollaborationsForIdea);
-collaborationRouter.post('/request', requestCollaboration);
-collaborationRouter.post('/approve/:collaborationId', approveCollaboration);
-collaborationRouter.post('/reject/:collaborationId', rejectCollaboration);
+collaborationRouter.get(
+  "/idea/:ideaId",
+  getCollaborationsForIdea
+);
+collaborationRouter.post(
+  "/request",
+  requestCollaboration
+);
+collaborationRouter.patch(
+  "/approve/:collaborationId",
+  approveCollaboration
+);
+collaborationRouter.patch(
+  "/reject/:collaborationId",
+  rejectCollaboration
+);
+collaborationRouter.patch(
+    "/withdraw/:collaborationId",
+    withdrawCollaboration
+);
 
 export default collaborationRouter;
