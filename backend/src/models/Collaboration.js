@@ -10,7 +10,7 @@ const collaborationSchema = new mongoose.Schema(
     },
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "User", // Reference to updated User model
       required: true,
       index: true, // Optimize queries by user
     },

@@ -2,26 +2,21 @@ import Collaboration from "../models/Collaboration.js";
 import Idea from "../models/Idea.js";
 import User from "../models/User.js";
 import mongoose from "mongoose";
-
-// Assuming Socket.IO is set up in the main server file
-// const //emitEvent = (event, data) => {
-//   if (global.io) {
-//     global.io.emit(event, data);
-//   }
-// };
+import { getIO } from "../config/socket.js";
 
 const getCollaborationsForIdea = async (req, res) => {
   const { ideaId } = req.params;
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const collaborations = await Collaboration.find({ idea: ideaId })
-      .populate("user", "firstName lastName email")
-      .populate("idea", "title")
-      .lean(); // Optimize for read-heavy operations
+      .populate("user", "name email") // Updated to match User model fields
+      .populate("idea", "title"); // Updated to match Idea model fields
 
     res.status(200).json({ success: true, data: collaborations });
   } catch (error) {
@@ -35,7 +30,9 @@ const requestCollaboration = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     if (!ideaId || !role) {
@@ -46,28 +43,16 @@ const requestCollaboration = async (req, res) => {
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
-    }
-
-    if (idea.status !== "open") {
       return res
-        .status(400)
-        .json({
-          success: false,
-          message: `Cannot request collaboration for an idea in ${idea.status} status`,
-        });
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (idea.creator.toString() === userId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Creator cannot request collaboration" });
-    }
-
-    if (idea.collaborators.includes(userId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Already a collaborator" });
+      return res.status(400).json({
+        success: false,
+        message: "Creator cannot request collaboration",
+      });
     }
 
     const collaboration = new Collaboration({
@@ -79,11 +64,13 @@ const requestCollaboration = async (req, res) => {
 
     await collaboration.save();
 
-    const populatedCollaboration = await Collaboration.findById(collaboration._id)
-      .populate("user", "firstName lastName email")
-      .populate("idea", "title");
+    const populatedCollaboration = await Collaboration.findById(
+      collaboration._id
+    )
+      .populate("user", "name email") // Updated to match User model fields
+      .populate("idea", "title"); // Updated to match Idea model fields
 
-    //emitEvent("newCollaborationRequest", populatedCollaboration); // Real-time update
+    getIO().emit("newCollaborationRequest", populatedCollaboration); // Emit new request event
 
     res.status(201).json({ success: true, data: populatedCollaboration });
   } catch (error) {
@@ -116,48 +103,36 @@ const approveCollaboration = async (req, res) => {
 
     const idea = await Idea.findById(collaboration.idea);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (idea.creator.toString() !== userId) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Only the idea creator can approve collaborations",
-        });
-    }
-
-    if (collaboration.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: `Cannot approve a collaboration with ${collaboration.status} status`,
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Only the idea creator can approve collaborations",
+      });
     }
 
     collaboration.status = "accepted";
     await collaboration.save();
 
-    // Add user to idea.collaborators
     if (!idea.collaborators.includes(collaboration.user)) {
       idea.collaborators.push(collaboration.user);
       await idea.save();
     }
 
-    // Update user.collaborations
-    const user = await User.findById(collaboration.user);
-    if (!user.collaborations.includes(idea._id)) {
-      user.collaborations.push(idea._id);
-      await user.save();
-    }
+    const populatedCollaboration = await Collaboration.findById(
+      collaboration._id
+    )
+      .populate("user", "name email") // Updated to match User model fields
+      .populate("idea", "title"); // Updated to match Idea model fields
 
-    const populatedCollaboration = await Collaboration.findById(collaboration._id)
-      .populate("user", "firstName lastName email")
-      .populate("idea", "title");
-
-    //emitEvent("collaborationApproved", populatedCollaboration); // Real-time update
+    getIO().emit("collaborationStatusUpdate", {
+      type: "approved",
+      collaboration: populatedCollaboration,
+    }); // Emit approval event
 
     res.status(200).json({ success: true, data: populatedCollaboration });
   } catch (error) {
@@ -185,35 +160,31 @@ const rejectCollaboration = async (req, res) => {
 
     const idea = await Idea.findById(collaboration.idea);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (idea.creator.toString() !== userId) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Only the idea creator can reject collaborations",
-        });
-    }
-
-    if (collaboration.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: `Cannot reject a collaboration with ${collaboration.status} status`,
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Only the idea creator can reject collaborations",
+      });
     }
 
     collaboration.status = "rejected";
     await collaboration.save();
 
-    const populatedCollaboration = await Collaboration.findById(collaboration._id)
-      .populate("user", "firstName lastName email")
-      .populate("idea", "title");
+    const populatedCollaboration = await Collaboration.findById(
+      collaboration._id
+    )
+      .populate("user", "name email") // Updated to match User model fields
+      .populate("idea", "title"); // Updated to match Idea model fields
 
-    //emitEvent("collaborationRejected", populatedCollaboration); // Real-time update
+    getIO().emit("collaborationStatusUpdate", {
+      type: "rejected",
+      collaboration: populatedCollaboration,
+    }); // Emit rejection event
 
     res.status(200).json({ success: true, data: populatedCollaboration });
   } catch (error) {
@@ -240,31 +211,32 @@ const withdrawCollaboration = async (req, res) => {
     }
 
     if (collaboration.user.toString() !== userId) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Only the requester can withdraw this collaboration",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Only the requester can withdraw this collaboration",
+      });
     }
 
     if (collaboration.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: `Cannot withdraw a collaboration with ${collaboration.status} status`,
-        });
+      return res.status(400).json({
+        success: false,
+        message: `Cannot withdraw a collaboration with ${collaboration.status} status`,
+      });
     }
 
     collaboration.status = "withdrawn";
     await collaboration.save();
 
-    const populatedCollaboration = await Collaboration.findById(collaboration._id)
-      .populate("user", "firstName lastName email")
+    const populatedCollaboration = await Collaboration.findById(
+      collaboration._id
+    )
+      .populate("user", "name email") // Updated to match User model fields
       .populate("idea", "title");
 
-    //emitEvent("collaborationWithdrawn", populatedCollaboration); // Real-time update
+    getIO().emit("collaborationStatusUpdate", {
+      type: "withdrawn",
+      collaboration: populatedCollaboration,
+    }); // Emit withdrawal event
 
     res.status(200).json({ success: true, data: populatedCollaboration });
   } catch (error) {

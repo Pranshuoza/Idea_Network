@@ -13,11 +13,14 @@ const ideaSchema = new mongoose.Schema(
       type: String,
       required: [true, "Description is required"],
       trim: true,
-      maxlength: [2000, "Description must be less than or equal to 2000 characters"],
+      maxlength: [
+        2000,
+        "Description must be less than or equal to 2000 characters",
+      ],
     },
     creator: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "User", // Reference to updated User model
       required: true,
       index: true, // For querying ideas by creator
     },
@@ -25,7 +28,8 @@ const ideaSchema = new mongoose.Schema(
       type: [String],
       default: [],
       validate: {
-        validator: (tags) => tags.every((tag) => tag.length > 0 && tag.length <= 30),
+        validator: (tags) =>
+          tags.every((tag) => tag.length > 0 && tag.length <= 30),
         message: "Each tag must be between 1 and 30 characters",
       },
       set: (tags) => [...new Set(tags.map((tag) => tag.toLowerCase().trim()))], // Remove duplicates, normalize
@@ -39,7 +43,7 @@ const ideaSchema = new mongoose.Schema(
     collaborators: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User", // Corrected from "Collaboration"
+        ref: "User", // Reference to updated User model
       },
     ],
     upvotes: [
@@ -78,7 +82,6 @@ const ideaSchema = new mongoose.Schema(
 //   }
 //   next();
 // });
-
 
 const Idea = mongoose.model("Idea", ideaSchema);
 

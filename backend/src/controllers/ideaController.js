@@ -1,6 +1,7 @@
 import Idea from "../models/Idea.js";
 import User from "../models/User.js";
 import mongoose from "mongoose";
+import { getIO } from "../config/socket.js";
 
 // Assuming Socket.IO is set up in the main server file
 // const //emitEvent = (event, data) => {
@@ -12,8 +13,8 @@ import mongoose from "mongoose";
 const getAllIdeas = async (req, res) => {
   try {
     const ideas = await Idea.find()
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName")
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name") // Updated to match User model fields
       .lean(); // Optimize for read-heavy operations
     res.status(200).json({ success: true, data: ideas });
   } catch (error) {
@@ -24,13 +25,17 @@ const getAllIdeas = async (req, res) => {
 const getIdeaById = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
     const idea = await Idea.findById(req.params.id)
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
     res.status(200).json({ success: true, data: idea });
   } catch (error) {
@@ -45,13 +50,22 @@ const createIdea = async (req, res) => {
   try {
     // Validate input
     if (!title || !description) {
-      return res.status(400).json({ success: false, message: "Title and description are required" });
+      return res.status(400).json({
+        success: false,
+        message: "Title and description are required",
+      });
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
+
+    // Ensure compatibility with updated User model
+    user.createdIdeas = user.createdIdeas || [];
+    user.collaborations = user.collaborations || [];
 
     const idea = new Idea({
       title,
@@ -66,10 +80,10 @@ const createIdea = async (req, res) => {
     await user.save();
 
     const populatedIdea = await Idea.findById(idea._id)
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
 
-    //emitEvent("newIdea", populatedIdea); // Real-time update
+    getIO().emit("newIdea", populatedIdea); // Emit new idea event
 
     res.status(201).json({ success: true, data: populatedIdea });
   } catch (error) {
@@ -84,17 +98,24 @@ const updateIdea = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     // Only creator can update
     if (idea.creator.toString() !== userId) {
-      return res.status(403).json({ success: false, message: "Only the creator can update this idea" });
+      return res.status(403).json({
+        success: false,
+        message: "Only the creator can update this idea",
+      });
     }
 
     const updates = {};
@@ -107,14 +128,16 @@ const updateIdea = async (req, res) => {
       new: true,
       runValidators: true,
     })
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
 
     if (!updatedIdea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
-    //emitEvent("updateIdea", updatedIdea); // Real-time update
+    getIO().emit("updateIdea", updatedIdea); // Emit update event
 
     res.status(200).json({ success: true, data: updatedIdea });
   } catch (error) {
@@ -128,23 +151,32 @@ const deleteIdea = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     // Only creator can delete
     if (idea.creator.toString() !== userId) {
-      return res.status(403).json({ success: false, message: "Only the creator can delete this idea" });
+      return res.status(403).json({
+        success: false,
+        message: "Only the creator can delete this idea",
+      });
     }
 
     await Idea.findByIdAndDelete(ideaId);
-    //emitEvent("deleteIdea", { ideaId }); // Real-time update
+    getIO().emit("deleteIdea", { ideaId }); // Emit delete event
 
-    res.status(200).json({ success: true, message: "Idea deleted successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Idea deleted successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -156,20 +188,29 @@ const joinIdea = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (idea.status !== "open") {
-      return res.status(400).json({ success: false, message: `Cannot join an idea in ${idea.status} status` });
+      return res.status(400).json({
+        success: false,
+        message: `Cannot join an idea in ${idea.status} status`,
+      });
     }
 
     if (idea.collaborators.includes(userId)) {
-      return res.status(400).json({ success: false, message: "Already a collaborator" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Already a collaborator" });
     }
 
     idea.collaborators.push(userId);
@@ -180,10 +221,10 @@ const joinIdea = async (req, res) => {
     await user.save();
 
     const populatedIdea = await Idea.findById(ideaId)
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
 
-    ////emitEvent("collaborationUpdate", populatedIdea); // Real-time update
+    getIO().emit("collaborationUpdate", populatedIdea); // Emit collaboration update
 
     res.status(200).json({ success: true, data: populatedIdea });
   } catch (error) {
@@ -197,20 +238,28 @@ const leaveIdea = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (!idea.collaborators.includes(userId)) {
-      return res.status(400).json({ success: false, message: "Not a collaborator" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Not a collaborator" });
     }
 
     if (idea.creator.toString() === userId) {
-      return res.status(400).json({ success: false, message: "Creator cannot leave the idea" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Creator cannot leave the idea" });
     }
 
     idea.collaborators = idea.collaborators.filter(
@@ -225,10 +274,10 @@ const leaveIdea = async (req, res) => {
     await user.save();
 
     const populatedIdea = await Idea.findById(ideaId)
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
 
-    //emitEvent("collaborationUpdate", populatedIdea); // Real-time update
+    getIO().emit("collaborationUpdate", populatedIdea); // Emit collaboration update
 
     res.status(200).json({ success: true, data: populatedIdea });
   } catch (error) {
@@ -242,26 +291,32 @@ const upvoteIdea = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (idea.upvotes.includes(userId)) {
-      return res.status(400).json({ success: false, message: "Already upvoted" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Already upvoted" });
     }
 
     idea.upvotes.push(userId);
     await idea.save();
 
     const populatedIdea = await Idea.findById(ideaId)
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
 
-    //emitEvent("upvoteUpdate", populatedIdea); // Real-time update
+    getIO().emit("upvoteUpdate", populatedIdea); // Emit upvote update
 
     res.status(200).json({ success: true, data: populatedIdea });
   } catch (error) {
@@ -275,26 +330,32 @@ const downvoteIdea = async (req, res) => {
 
   try {
     if (!mongoose.isValidObjectId(ideaId)) {
-      return res.status(400).json({ success: false, message: "Invalid idea ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid idea ID" });
     }
 
     const idea = await Idea.findById(ideaId);
     if (!idea) {
-      return res.status(404).json({ success: false, message: "Idea not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Idea not found" });
     }
 
     if (!idea.upvotes.includes(userId)) {
       return res.status(400).json({ success: false, message: "Not upvoted" });
     }
 
-    idea.upvotes = idea.upvotes.filter((upvote) => upvote.toString() !== userId);
+    idea.upvotes = idea.upvotes.filter(
+      (upvote) => upvote.toString() !== userId
+    );
     await idea.save();
 
     const populatedIdea = await Idea.findById(ideaId)
-      .populate("creator", "firstName lastName email")
-      .populate("collaborators", "firstName lastName");
+      .populate("creator", "name email") // Updated to match User model fields
+      .populate("collaborators", "name"); // Updated to match User model fields
 
-    //emitEvent("upvoteUpdate", populatedIdea); // Real-time update
+    getIO().emit("upvoteUpdate", populatedIdea); // Emit upvote update
 
     res.status(200).json({ success: true, data: populatedIdea });
   } catch (error) {

@@ -3,29 +3,13 @@ import bcrypt from "bcrypt";
 
 const userSchema = new mongoose.Schema(
   {
-    firstName: {
+    name: {
       type: String,
       required: [true, "First name is required"],
       minlength: [2, "First name must be at least 2 characters long"],
       maxlength: [20, "First name must be less than or equal to 20 characters"],
       trim: true,
       lowercase: true,
-    },
-    lastName: {
-      type: String,
-      required: [true, "Last name is required"],
-      minlength: [2, "Last name must be at least 2 characters long"],
-      maxlength: [20, "Last name must be less than or equal to 20 characters"],
-      trim: true,
-      lowercase: true,
-    },
-    mobileNumber: {
-      type: String,
-      trim: true,
-      required: [true, "Phone number is required"],
-      match: [/^\d{10}$/, "Phone number must be 10 digits"],
-      unique: true,
-      index: true, // Improve query performance
     },
     email: {
       type: String,
@@ -68,23 +52,16 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allow null for non-Google users
+    },
   },
   {
     timestamps: true,
   }
 );
-
-// Hash password before saving, but only if modified
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
-
-// Method to compare passwords during login
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
-};
 
 const User = mongoose.model("User", userSchema);
 
