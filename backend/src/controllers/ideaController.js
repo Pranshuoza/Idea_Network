@@ -3,13 +3,6 @@ import User from "../models/User.js";
 import mongoose from "mongoose";
 import { getIO } from "../config/socket.js";
 
-// Assuming Socket.IO is set up in the main server file
-// const //emitEvent = (event, data) => {
-//   if (global.io) {
-//     global.io.emit(event, data);
-//   }
-// };
-
 const getAllIdeas = async (req, res) => {
   try {
     const ideas = await Idea.find()

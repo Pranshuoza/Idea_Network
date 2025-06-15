@@ -15,6 +15,7 @@ import { initSocket } from "./config/socket.js";
 import authRouter from "./routes/authRoute.js";
 import ideaRouter from "./routes/ideaRoute.js";
 import collaborationRouter from "./routes/collaborationRoute.js";
+import startupRouter from "./routes/startupRoute.js";
 import { protectRoute } from "./middleware/authProtect.js";
 
 const app = express();
@@ -23,33 +24,63 @@ const httpServer = createServer(app);
 // Initialize Socket.IO
 initSocket(httpServer);
 
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  })
-);
+// CORS configuration
+const corsOptions = {
+  origin: "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
-app.use(
-  session({
-    secret: process.env.JWT_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false },
-  })
-);
+app.use(cors(corsOptions));
 
+// Session configuration
+const sessionConfig = {
+  secret: process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: "lax",
+  },
+  name: "sessionId", // Change default connect.sid
+};
+
+app.use(session(sessionConfig));
+
+// Body parsing middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Initialize Passport and restore authentication state from session
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(bodyParser.json());
-app.use(cookieParser());
-app.use(bodyParser.urlencoded({ extended: true }));
 
+// Routes
 app.use("/api/auth", authRouter);
 app.use("/ideas", protectRoute, ideaRouter);
 app.use("/collaboration", collaborationRouter);
+app.use("/startup", startupRouter);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
+
+// Start server
 httpServer.listen(ServerConfig.PORT, async () => {
-  await connectDB();
-  console.log(`Server started at PORT ${ServerConfig.PORT}`);
+  try {
+    await connectDB();
+    console.log(`Server started at PORT ${ServerConfig.PORT}`);
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
 });
