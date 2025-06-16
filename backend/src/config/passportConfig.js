@@ -21,6 +21,10 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: "http://localhost:5005/auth/google/callback",
+      scope: [
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ],
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -37,20 +41,25 @@ passport.use(
           // Check if email already exists
           const existingUser = await User.findOne({ email });
           if (existingUser) {
-            return done(
-              new Error("Email already registered with another account"),
-              null
-            );
+            // Link Google account to existing user
+            existingUser.googleId = profile.id;
+            await existingUser.save();
+            return done(null, existingUser);
           }
 
           // Create new user with required fields
+          const name = profile.displayName || email.split("@")[0];
+          const [firstName, ...lastNameParts] = name.split(" ");
+          const lastName = lastNameParts.join(" ") || "User";
+
           user = await User.create({
             googleId: profile.id,
-            name: profile.displayName || email.split("@")[0], // Fallback to email username if no display name
+            name: name,
             email: email,
-            address: "", // Default empty address
-            role: "user", // Default role
-            createdIdeas: [], // Initialize empty arrays
+            mobileNumber: "0000000000", // Default mobile number for Google users
+            address: "",
+            role: "user",
+            createdIdeas: [],
             collaborations: [],
           });
         }

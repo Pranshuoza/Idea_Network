@@ -5,11 +5,12 @@ import Idea from "../models/Idea.js";
 import Collaboration from "../models/Collaboration.js";
 
 const signup = async (req, res) => {
-  const { name, email, password, address } = req.body;
+  const { firstName, lastName, mobileNumber, email, password, address } =
+    req.body;
 
   try {
-    if (!name || !email || !password || !address) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!firstName || !lastName || !mobileNumber || !email || !password) {
+      return res.status(400).json({ message: "Required fields are missing" });
     }
     if (password.length < 6) {
       return res
@@ -23,10 +24,11 @@ const signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
-      name,
+      name: `${firstName} ${lastName}`,
       email,
-      password: hashedPassword, // Save hashed password
-      address,
+      password: hashedPassword,
+      address: address || "",
+      mobileNumber,
     });
 
     await newUser.save();
@@ -37,6 +39,7 @@ const signup = async (req, res) => {
       name: newUser.name,
       email: newUser.email,
       address: newUser.address,
+      mobileNumber: newUser.mobileNumber,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -48,17 +51,21 @@ const login = async (req, res) => {
   try {
     const user = await User.findOne({ email: email.toLowerCase() }).select(
       "+password"
-    ); // Ensure email is case-insensitive
+    );
+
     if (!user) {
-      return res.status(400).json({ message: "Invalid email" }); // Email not found
+      return res.status(400).json({ message: "Invalid email" });
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      req.body.password,
-      user.password
-    );
+    if (!user.password) {
+      return res
+        .status(400)
+        .json({ message: "Please use Google sign-in for this account" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ message: "Invalid password" }); // Password mismatch
+      return res.status(400).json({ message: "Invalid password" });
     }
 
     const token = generateToken(user._id, res);
@@ -70,7 +77,7 @@ const login = async (req, res) => {
       token,
     });
   } catch (error) {
-    console.error("Error during login:", error.message); // Log the error for debugging
+    console.error("Error during login:", error.message);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };

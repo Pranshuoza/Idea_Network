@@ -13,6 +13,7 @@ import session from "express-session";
 import { initSocket } from "./config/socket.js";
 
 import authRouter from "./routes/authRoute.js";
+import socialAuthRouter from "./routes/socialAuthRoute.js";
 import ideaRouter from "./routes/ideaRoute.js";
 import collaborationRouter from "./routes/collaborationRoute.js";
 import startupRouter from "./routes/startupRoute.js";
@@ -62,6 +63,7 @@ app.use(passport.session());
 
 // Routes
 app.use("/api/auth", authRouter);
+app.use('/auth', socialAuthRouter);
 app.use("/ideas", protectRoute, ideaRouter);
 app.use("/collaboration", protectRoute, collaborationRouter);
 app.use("/startup", protectRoute, startupRouter);
