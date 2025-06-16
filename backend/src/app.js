@@ -17,6 +17,7 @@ import ideaRouter from "./routes/ideaRoute.js";
 import collaborationRouter from "./routes/collaborationRoute.js";
 import startupRouter from "./routes/startupRoute.js";
 import { protectRoute } from "./middleware/authProtect.js";
+import notificationRouter from "./routes/notificationRoute.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -62,8 +63,9 @@ app.use(passport.session());
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/ideas", protectRoute, ideaRouter);
-app.use("/collaboration", collaborationRouter);
-app.use("/startup", startupRouter);
+app.use("/collaboration", protectRoute, collaborationRouter);
+app.use("/startup", protectRoute, startupRouter);
+app.use("/notifications", protectRoute, notificationRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

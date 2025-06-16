@@ -14,10 +14,10 @@ const createStartup = async (req, res) => {
         .json({ success: false, message: "Name and description are required" });
     }
 
-    if (description.length < 100) {
+    if (description.length < 1000) {
       return res.status(400).json({
         success: false,
-        message: "Description must be at least 100 characters",
+        message: "Description must be at least 1000 characters",
       });
     }
 

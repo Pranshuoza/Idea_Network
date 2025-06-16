@@ -7,22 +7,19 @@ const ideaSchema = new mongoose.Schema(
       required: [true, "Title is required"],
       trim: true,
       maxlength: [100, "Title must be less than or equal to 100 characters"],
-      index: true, // For searching/sorting
+      index: true,
     },
     description: {
       type: String,
       required: [true, "Description is required"],
       trim: true,
-      maxlength: [
-        2000,
-        "Description must be less than or equal to 2000 characters",
-      ],
+      maxlength: [2000, "Description must be less than or equal to 2000 characters"],
     },
     creator: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // Reference to updated User model
+      ref: "User",
       required: true,
-      index: true, // For querying ideas by creator
+      index: true,
     },
     tags: {
       type: [String],
@@ -32,18 +29,18 @@ const ideaSchema = new mongoose.Schema(
           tags.every((tag) => tag.length > 0 && tag.length <= 30),
         message: "Each tag must be between 1 and 30 characters",
       },
-      set: (tags) => [...new Set(tags.map((tag) => tag.toLowerCase().trim()))], // Remove duplicates, normalize
+      set: (tags) => [...new Set(tags.map((tag) => tag.toLowerCase().trim()))],
     },
     status: {
       type: String,
       enum: ["draft", "open", "in-progress", "completed"],
       default: "open",
-      index: true, // For filtering by status
+      index: true,
     },
     collaborators: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User", // Reference to updated User model
+        ref: "User",
       },
     ],
     upvotes: [
@@ -63,25 +60,25 @@ const ideaSchema = new mongoose.Schema(
 );
 
 // Prevent invalid status transitions (e.g., completed -> draft)
-// ideaSchema.pre("save", function (next) {
-//   if (this.isModified("status")) {
-//     const validTransitions = {
-//       draft: ["open"],
-//       open: ["in-progress"],
-//       "in-progress": ["completed"],
-//       completed: [], // No transitions from completed
-//     };
-//     const currentStatus = this.status;
-//     const previousStatus = this.get("status", null, { getters: false });
-//     if (
-//       previousStatus &&
-//       !validTransitions[previousStatus].includes(currentStatus)
-//     ) {
-//       return next(new Error(`Invalid status transition from ${previousStatus} to ${currentStatus}`));
-//     }
-//   }
-//   next();
-// });
+ideaSchema.pre("save", function (next) {
+  if (this.isModified("status")) {
+    const validTransitions = {
+      draft: ["open"],
+      open: ["in-progress"],
+      "in-progress": ["completed"],
+      completed: [], // No transitions from completed
+    };
+    const currentStatus = this.status;
+    const previousStatus = this.get("status", null, { getters: false });
+    if (
+      previousStatus &&
+      !validTransitions[previousStatus].includes(currentStatus)
+    ) {
+      return next(new Error(`Invalid status transition from ${previousStatus} to ${currentStatus}`));
+    }
+  }
+  next();
+});
 
 const Idea = mongoose.model("Idea", ideaSchema);
 
